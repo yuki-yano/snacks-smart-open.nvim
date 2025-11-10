@@ -16,6 +16,13 @@ local function normalize_scope(scope)
   return scope
 end
 
+local function serialize_value(value)
+  if type(value) == 'number' then
+    return ('%.10f'):format(value)
+  end
+  return value
+end
+
 local function ensure_parent(path)
   vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
 end
@@ -177,7 +184,7 @@ function M.ensure_weights(weights, scope)
     return
   end
   for key, value in pairs(list) do
-    stmt:exec({ scoped, key, value })
+    stmt:exec({ scoped, key, serialize_value(value) })
   end
   stmt:reset()
 end
@@ -310,7 +317,7 @@ function M.save_weights(weights, scope)
     return
   end
   for key, value in pairs(weights or {}) do
-    stmt:exec({ scoped, key, value })
+    stmt:exec({ scoped, key, serialize_value(value) })
   end
   stmt:reset()
 end
