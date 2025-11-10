@@ -1,6 +1,9 @@
 local Config = require('snacks-smart-open.config')
 local DB = require('snacks-smart-open.db')
 local State = require('snacks-smart-open.state')
+local Util = require('snacks-smart-open.util')
+
+local uv = vim.uv or vim.loop
 
 local picker_util = require('snacks.picker.util')
 
@@ -86,6 +89,19 @@ local function select_entry(results, path)
   end
 end
 
+local function is_protected(key, cfg)
+  local protect = cfg and cfg.protect or nil
+  if not protect then
+    return false
+  end
+  for _, name in ipairs(protect) do
+    if name == key then
+      return true
+    end
+  end
+  return false
+end
+
 local function adjust_weights(original, weights, success_entry, miss_entry, factor, cfg)
   if not success_entry or not miss_entry then
     return
@@ -121,6 +137,28 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
     return
   end
 
+  local min_weight = cfg.min_weight or 1
+  local max_weight = cfg.max_weight or math.huge
+  local max_delta = cfg.max_delta or 0
+
+  local function apply_delta(key, weight, direction, delta)
+    if direction == 'down' and is_protected(key, cfg) then
+      return
+    end
+    if max_delta > 0 then
+      delta = math.min(delta, max_delta)
+    end
+    if delta <= 0 then
+      return
+    end
+    local current = weights[key] or weight
+    if direction == 'down' then
+      weights[key] = math.max(min_weight, current - delta)
+    else
+      weights[key] = math.min(max_weight, current + delta)
+    end
+  end
+
   for key, weight in pairs(original) do
     if weight and weight ~= 0 then
       local hit = unweight(key, success_entry.scores[key] or 0)
@@ -128,10 +166,10 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
       if hit and miss then
         if miss > hit and to_deduct > 0 then
           local delta = cfg.adjustment_points * factor * ((miss - hit) / to_deduct)
-          weights[key] = math.max(cfg.min_weight or 1, (weights[key] or weight) - delta)
+          apply_delta(key, weight, 'down', delta)
         elseif hit > miss and to_add > 0 then
           local delta = cfg.adjustment_points * factor * ((hit - miss) / to_add)
-          weights[key] = (weights[key] or weight) + delta
+          apply_delta(key, weight, 'up', delta)
         end
       end
     end
@@ -188,6 +226,20 @@ local function record_selected(paths, config)
   end
 end
 
+local function resolve_scope(picker, config)
+  config = config or Config.get()
+  local filter = picker and picker.input and picker.input.filter
+  local filter_cwd = filter and filter.cwd or nil
+  local state = State.get() or {}
+  local base_path = filter_cwd or state.current_path or state.cwd or uv.cwd() or vim.fn.getcwd()
+  local scope = Util.resolve_scope({
+    path = base_path,
+    cwd = state.cwd,
+    markers = config.scoring and config.scoring.project_roots or {},
+  })
+  return scope or ''
+end
+
 function M.bootstrap(config)
   config = config or Config.get()
   DB.ensure(config)
@@ -239,6 +291,7 @@ end
 
 function M.before_confirm(picker)
   local config = Config.get()
+  local scope = resolve_scope(picker, config)
   local selected = picker:selected({ fallback = true })
   local selected_paths = {}
   for _, item in ipairs(selected) do
@@ -250,7 +303,8 @@ function M.before_confirm(picker)
 
   return {
     config = config,
-    weights = DB.get_weights(config.weights),
+    scope = scope,
+    weights = DB.get_weights(config.weights, scope),
     results = capture_results(picker, config),
     selected_paths = selected_paths,
   }
@@ -264,7 +318,7 @@ function M.after_confirm(_, ctx, _result)
   record_selected(ctx.selected_paths, config)
   if ctx.results and ctx.weights and ctx.selected_paths and ctx.selected_paths[1] then
     local updated = revise_weights(ctx.weights, ctx.results, ctx.selected_paths[1], config.learning)
-    DB.save_weights(updated)
+    DB.save_weights(updated, ctx.scope)
   end
 end
 

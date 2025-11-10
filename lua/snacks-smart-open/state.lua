@@ -1,5 +1,7 @@
 local Util = require('snacks-smart-open.util')
 
+local uv = vim.uv or vim.loop
+
 local M = {}
 
 local snapshot ---@type {open_map:table<string,{path:string,bufnr:number,modified:boolean,lastused:number,current:boolean}>,open_list:table[],current_buf:number,current_path:string?,alternate_path:string?,cwd:string?}?
@@ -9,6 +11,7 @@ local function gather()
   local current_path = Util.normalize_path(vim.api.nvim_buf_get_name(current_buf))
   local alt_buf = vim.fn.bufnr('#')
   local alternate_path = alt_buf > 0 and Util.normalize_path(vim.api.nvim_buf_get_name(alt_buf)) or nil
+  local cwd = Util.normalize_path(uv.cwd() or vim.fn.getcwd())
 
   local map, list = {}, {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -42,6 +45,7 @@ local function gather()
     alternate_path = alternate_path,
     open_map = map,
     open_list = list,
+    cwd = cwd,
   }
   return snapshot
 end

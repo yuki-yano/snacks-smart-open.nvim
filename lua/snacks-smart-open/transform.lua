@@ -65,7 +65,7 @@ local function ensure_context(ctx)
   local open_map = state.open_map or {}
   local open_list = state.open_list or {}
 
-  local cwd = norm((ctx.filter and ctx.filter.cwd) or vim.loop.cwd() or vim.fn.getcwd())
+  local cwd = norm((ctx.filter and ctx.filter.cwd) or state.cwd or vim.loop.cwd() or vim.fn.getcwd())
   if not current_path and not vim.in_fast_event() then
     current_path = norm(vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf()))
   end
@@ -76,7 +76,14 @@ local function ensure_context(ctx)
     end
   end
 
-  local weights = DB.get_weights(config.weights)
+  local scope_path = (ctx.filter and ctx.filter.cwd) or current_path or state.cwd or cwd
+  local scope = Util.resolve_scope({
+    path = scope_path,
+    cwd = state.cwd or cwd,
+    markers = (config.scoring and config.scoring.project_roots) or {},
+  }) or cwd
+
+  local weights = DB.get_weights(config.weights, scope)
   local max_flat = DB.max_flat_score(now)
   if not max_flat or max_flat <= 0 then
     max_flat = 1
@@ -97,6 +104,8 @@ local function ensure_context(ctx)
   context = {
     now = now,
     cwd = cwd,
+    scope = scope,
+    project_root = scope,
     current_path = current_path,
     alternate_path = alternate_path,
     open_map = open_map,
@@ -145,7 +154,8 @@ local function compute_scores(context, path)
   local anchor = context.current_path or context.cwd
   raw.proximity = Util.normalize_proximity(Util.calculate_proximity(anchor, path))
 
-  if context.cwd and path:sub(1, #context.cwd) == context.cwd then
+  local project_root = context.project_root or context.cwd
+  if project_root and path:sub(1, #project_root) == project_root then
     raw.project = 1
   end
 
@@ -219,6 +229,7 @@ function M.apply(item, ctx)
   smart_state.recent_rank = rank
   smart_state.timestamp = context.now
   smart_state.weights = context.weights
+  smart_state.scope = context.scope
   smart_state.open = open_entry
 
   item.smart_open = smart_state

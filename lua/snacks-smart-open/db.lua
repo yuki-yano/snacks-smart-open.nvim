@@ -4,10 +4,17 @@ local sqlite = require('snacks.picker.util.db')
 
 local M = {}
 
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 local connection ---@type snacks.picker.db?
 local connection_path ---@type string?
 local statements = {} ---@type table<string, snacks.picker.db.Query>
+
+local function normalize_scope(scope)
+  if type(scope) ~= 'string' or scope == '' then
+    return ''
+  end
+  return scope
+end
 
 local function ensure_parent(path)
   vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
@@ -41,11 +48,7 @@ local function get_user_version(db)
   return version
 end
 
-local function apply_schema(db)
-  local current_version = get_user_version(db)
-  if current_version >= SCHEMA_VERSION then
-    return
-  end
+local function migrate_to_v1(db)
   db:exec([[
     CREATE TABLE IF NOT EXISTS snacks_smart_open_files (
       path TEXT PRIMARY KEY,
@@ -74,6 +77,32 @@ local function apply_schema(db)
       value TEXT NOT NULL
     );
   ]])
+end
+
+local function migrate_to_v2(db)
+  close_statements()
+  db:exec('DROP TABLE IF EXISTS snacks_smart_open_weights;')
+  db:exec([[
+    CREATE TABLE IF NOT EXISTS snacks_smart_open_weights (
+      scope TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value REAL NOT NULL,
+      PRIMARY KEY(scope, key)
+    );
+  ]])
+  db:exec([[CREATE INDEX IF NOT EXISTS idx_snacks_smart_open_weights_scope ON snacks_smart_open_weights(scope);]])
+end
+
+local function apply_schema(db)
+  local current_version = get_user_version(db)
+  if current_version < 1 then
+    migrate_to_v1(db)
+    current_version = 1
+  end
+  if current_version < 2 then
+    migrate_to_v2(db)
+    current_version = 2
+  end
   db:exec(('PRAGMA user_version = %d;'):format(SCHEMA_VERSION))
 end
 
@@ -133,29 +162,39 @@ function M.exec(sql)
   db:exec(sql)
 end
 
-function M.ensure_weights(weights)
+function M.ensure_weights(weights, scope)
   local db = connect()
   if not db then
     return
   end
-  local stmt = db:prepare('INSERT OR IGNORE INTO snacks_smart_open_weights (key, value) VALUES (?, ?);')
-  for key, value in pairs(weights) do
-    stmt:exec({ key, value })
+  local list = weights or {}
+  local scoped = normalize_scope(scope)
+  local stmt = M.prepare(
+    'ensure_weight',
+    'INSERT OR IGNORE INTO snacks_smart_open_weights (scope, key, value) VALUES (?, ?, ?);'
+  )
+  if not stmt then
+    return
   end
-  stmt:close()
+  for key, value in pairs(list) do
+    stmt:exec({ scoped, key, value })
+  end
+  stmt:reset()
 end
 
-function M.get_weights(defaults)
+function M.get_weights(defaults, scope)
   local db = connect()
   local ret = vim.deepcopy(defaults or {})
   if not db then
     return ret
   end
-  local stmt = M.prepare('select_weights', 'SELECT key, value FROM snacks_smart_open_weights;')
+  local scoped = normalize_scope(scope)
+  M.ensure_weights(defaults or {}, scoped)
+  local stmt = M.prepare('select_weights', 'SELECT key, value FROM snacks_smart_open_weights WHERE scope = ?;')
   if not stmt then
     return ret
   end
-  local code = stmt:exec()
+  local code = stmt:exec({ scoped })
   while code == 100 do
     local key = stmt:col('string', 0)
     local value = stmt:col('number', 1)
@@ -253,24 +292,25 @@ function M.get_recent(limit)
   return results
 end
 
-function M.save_weights(weights)
+function M.save_weights(weights, scope)
   local db = connect()
   if not db then
     return
   end
+  local scoped = normalize_scope(scope)
   local stmt = M.prepare(
     'save_weight',
     [[
-      INSERT INTO snacks_smart_open_weights (key, value)
-      VALUES (?, ?)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+      INSERT INTO snacks_smart_open_weights (scope, key, value)
+      VALUES (?, ?, ?)
+      ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value;
     ]]
   )
   if not stmt then
     return
   end
   for key, value in pairs(weights or {}) do
-    stmt:exec({ key, value })
+    stmt:exec({ scoped, key, value })
   end
   stmt:reset()
 end

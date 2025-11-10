@@ -26,6 +26,9 @@ local defaults = {
     promote_cap = 15,
     demote_cap = 1,
     min_weight = 1,
+    max_weight = 40,
+    max_delta = 0.25,
+    protect = { 'frecency', 'recency', 'project', 'proximity', 'open', 'alt' },
     auto_record = true,
   },
   scoring = {

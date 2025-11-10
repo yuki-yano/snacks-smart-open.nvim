@@ -1,3 +1,5 @@
+local uv = vim.uv or vim.loop
+
 local M = {}
 
 local PATH_SEP = package.config:sub(1, 1)
@@ -20,6 +22,53 @@ function M.normalize_path(path)
     return nil
   end
   return path:gsub('/+$', '')
+end
+
+local function normalize_dir(path)
+  if not path or path == '' then
+    return nil
+  end
+  local stat = uv.fs_stat(path)
+  if stat and stat.type == 'directory' then
+    return path
+  end
+  return vim.fs.dirname(path)
+end
+
+function M.find_project_root(path, markers)
+  path = M.normalize_path(path)
+  if not path then
+    return nil
+  end
+  local start = normalize_dir(path)
+  if not start or start == '' then
+    return nil
+  end
+  markers = markers or {}
+  if #markers == 0 then
+    return start
+  end
+  local found = vim.fs.find(markers, {
+    upward = true,
+    path = start,
+    stop = uv.os_homedir() or PATH_SEP,
+  })
+  if #found > 0 then
+    return M.normalize_path(vim.fs.dirname(found[1]))
+  end
+  return start
+end
+
+function M.resolve_scope(opts)
+  opts = opts or {}
+  local markers = opts.markers or {}
+  local path = opts.path or opts.cwd or uv.cwd() or vim.fn.getcwd()
+  path = M.normalize_path(path)
+  if not path then
+    return nil
+  end
+  local root = M.find_project_root(path, markers)
+  return root or path
 end
 
 function M.calculate_proximity(a, b)
