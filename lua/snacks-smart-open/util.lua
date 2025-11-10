@@ -5,31 +5,31 @@ local M = {}
 local PATH_SEP = package.config:sub(1, 1)
 
 function M.normalize_path(path)
-  if not path or path == '' then
+  if not path or path == "" then
     return nil
   end
-  if path:sub(1, 1) == '~' then
+  if path:sub(1, 1) == "~" then
     path = vim.fn.expand(path)
   end
-  path = vim.fn.fnamemodify(path, ':p')
+  path = vim.fn.fnamemodify(path, ":p")
   local fs = _G.svim and _G.svim.fs or nil
   if fs and fs.normalize then
     path = fs.normalize(path, { _fast = true, expand_env = false })
   elseif vim.fs and vim.fs.normalize then
     path = vim.fs.normalize(path)
   end
-  if path == '' then
+  if path == "" then
     return nil
   end
-  return path:gsub('/+$', '')
+  return path:gsub("/+$", "")
 end
 
 local function normalize_dir(path)
-  if not path or path == '' then
+  if not path or path == "" then
     return nil
   end
   local stat = uv.fs_stat(path)
-  if stat and stat.type == 'directory' then
+  if stat and stat.type == "directory" then
     return path
   end
   return vim.fs.dirname(path)
@@ -41,7 +41,7 @@ function M.find_project_root(path, markers)
     return nil
   end
   local start = normalize_dir(path)
-  if not start or start == '' then
+  if not start or start == "" then
     return nil
   end
   markers = markers or {}

@@ -2,7 +2,7 @@ local M = {}
 
 local defaults = {
   db = {
-    path = vim.fn.stdpath('data') .. '/snacks/smart-open.sqlite3',
+    path = vim.fn.stdpath("data") .. "/snacks/smart-open.sqlite3",
   },
   frecency = {
     half_life_days = 10,
@@ -28,7 +28,7 @@ local defaults = {
     min_weight = 1,
     max_weight = 40,
     max_delta = 0.25,
-    protect = { 'frecency', 'recency', 'project', 'proximity', 'open', 'alt' },
+    protect = { "frecency", "recency", "project", "proximity", "open", "alt" },
     auto_record = true,
   },
   scoring = {
@@ -36,11 +36,11 @@ local defaults = {
     recency_window = 7 * 24 * 60 * 60,
     recency_limit = 512,
     project_roots = {
-      '.git',
-      '.hg',
-      '.svn',
-      'package.json',
-      'pyproject.toml',
+      ".git",
+      ".hg",
+      ".svn",
+      "package.json",
+      "pyproject.toml",
     },
   },
   picker = {
@@ -52,17 +52,17 @@ local defaults = {
       sort_empty = true,
     },
     sort = {
-      fields = { 'score:desc', '#text', 'idx' },
+      fields = { "score:desc", "#text", "idx" },
     },
   },
   debug = {
     log = false,
   },
-  apply_to = { 'smart', 'smart_open_files' },
+  apply_to = { "smart", "smart_open_files" },
 }
 
 local function expand_path(path)
-  if vim.startswith(path, '~') then
+  if vim.startswith(path, "~") then
     path = vim.fn.expand(path)
   end
   return vim.fs.normalize(path)
@@ -70,7 +70,7 @@ end
 
 local function with_defaults(opts)
   opts = opts or {}
-  local merged = vim.tbl_deep_extend('force', {}, defaults, opts)
+  local merged = vim.tbl_deep_extend("force", {}, defaults, opts)
   merged.db.path = expand_path(merged.db.path)
   local half_life = merged.frecency.half_life_days
   if half_life <= 0 then

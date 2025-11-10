@@ -1,4 +1,4 @@
-local Util = require('snacks-smart-open.util')
+local Util = require("snacks-smart-open.util")
 
 local uv = vim.uv or vim.loop
 
@@ -9,7 +9,7 @@ local snapshot ---@type {open_map:table<string,{path:string,bufnr:number,modifie
 local function gather()
   local current_buf = vim.api.nvim_get_current_buf()
   local current_path = Util.normalize_path(vim.api.nvim_buf_get_name(current_buf))
-  local alt_buf = vim.fn.bufnr('#')
+  local alt_buf = vim.fn.bufnr("#")
   local alternate_path = alt_buf > 0 and Util.normalize_path(vim.api.nvim_buf_get_name(alt_buf)) or nil
   local cwd = Util.normalize_path(uv.cwd() or vim.fn.getcwd())
 
@@ -17,7 +17,7 @@ local function gather()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.bo[buf].buflisted then
       local name = vim.api.nvim_buf_get_name(buf)
-      if name ~= '' then
+      if name ~= "" then
         local path = Util.normalize_path(name)
         if path then
           local info = vim.fn.getbufinfo(buf)[1]

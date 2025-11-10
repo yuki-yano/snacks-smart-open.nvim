@@ -1,18 +1,18 @@
-local Config = require('snacks-smart-open.config')
-local Runtime = require('snacks-smart-open.runtime')
+local Config = require("snacks-smart-open.config")
+local Runtime = require("snacks-smart-open.runtime")
 
 local M = {}
 
 local function notify(message, level)
   vim.schedule(function()
-    vim.notify(message, level or vim.log.levels.WARN, { title = 'snacks-smart-open' })
+    vim.notify(message, level or vim.log.levels.WARN, { title = "snacks-smart-open" })
   end)
 end
 
 local function try_attach()
-  local ok, snacks = pcall(require, 'snacks')
+  local ok, snacks = pcall(require, "snacks")
   if not ok then
-    snacks = rawget(_G, 'Snacks')
+    snacks = rawget(_G, "Snacks")
   end
   if not snacks then
     return false
@@ -32,7 +32,7 @@ function M.setup(opts)
     end
     if not try_attach() then
       notify(
-        'Unable to initialize snacks-smart-open because snacks.nvim is not loaded yet. Please load snacks.nvim and call setup() again.'
+        "Unable to initialize snacks-smart-open because snacks.nvim is not loaded yet. Please load snacks.nvim and call setup() again."
       )
     end
   end, 100)

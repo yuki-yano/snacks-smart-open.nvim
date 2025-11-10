@@ -1,11 +1,11 @@
 local uv = vim.uv or vim.loop
 
 local function ensure_dir(path)
-  if not path or path == '' then
+  if not path or path == "" then
     return
   end
   if vim.fn.isdirectory(path) == 0 then
-    vim.fn.mkdir(path, 'p')
+    vim.fn.mkdir(path, "p")
   end
 end
 
@@ -13,23 +13,23 @@ local function add_package_path(path)
   if not path or vim.fn.isdirectory(path) == 0 then
     return
   end
-  local lua_dir = path .. '/lua'
+  local lua_dir = path .. "/lua"
   if vim.fn.isdirectory(lua_dir) == 1 then
-    package.path = lua_dir .. '/?.lua;' .. lua_dir .. '/?/init.lua;' .. package.path
+    package.path = lua_dir .. "/?.lua;" .. lua_dir .. "/?/init.lua;" .. package.path
   end
 end
 
-local root = vim.fn.fnamemodify(vim.fn.expand('<sfile>'), ':p:h:h')
+local root = vim.fn.fnamemodify(vim.fn.expand("<sfile>"), ":p:h:h")
 ensure_dir(root)
 vim.opt.runtimepath:prepend(root)
 add_package_path(root)
 
 local candidates = {}
-if vim.env.SNACKS_NVIM_PATH and vim.env.SNACKS_NVIM_PATH ~= '' then
+if vim.env.SNACKS_NVIM_PATH and vim.env.SNACKS_NVIM_PATH ~= "" then
   table.insert(candidates, vim.env.SNACKS_NVIM_PATH)
 end
-table.insert(candidates, vim.fn.stdpath('data') .. '/lazy/snacks.nvim')
-table.insert(candidates, vim.fn.expand('~/repos/github.com/folke/snacks.nvim'))
+table.insert(candidates, vim.fn.stdpath("data") .. "/lazy/snacks.nvim")
+table.insert(candidates, vim.fn.expand("~/repos/github.com/folke/snacks.nvim"))
 
 for _, path in ipairs(candidates) do
   if vim.fn.isdirectory(path) == 1 then
@@ -41,7 +41,7 @@ end
 
 local function noop() end
 _G.Snacks = _G.Snacks or {}
-if type(_G.Snacks.notify) ~= 'table' then
+if type(_G.Snacks.notify) ~= "table" then
   _G.Snacks.notify = {}
 end
 setmetatable(_G.Snacks.notify, { __call = noop })

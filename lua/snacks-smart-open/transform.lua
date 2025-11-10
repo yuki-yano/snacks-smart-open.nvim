@@ -1,11 +1,11 @@
-local Config = require('snacks-smart-open.config')
-local DB = require('snacks-smart-open.db')
-local State = require('snacks-smart-open.state')
-local Util = require('snacks-smart-open.util')
+local Config = require("snacks-smart-open.config")
+local DB = require("snacks-smart-open.db")
+local State = require("snacks-smart-open.state")
+local Util = require("snacks-smart-open.util")
 
-local picker_util = require('snacks.picker.util')
+local picker_util = require("snacks.picker.util")
 
-local CONTEXT_KEY = 'snacks_smart_open_ctx'
+local CONTEXT_KEY = "snacks_smart_open_ctx"
 
 local function get_record(context, path)
   local cache = context.records
@@ -70,7 +70,7 @@ local function ensure_context(ctx)
     current_path = norm(vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf()))
   end
   if not alternate_path and not vim.in_fast_event() then
-    local alt_buf = vim.fn.bufnr('#')
+    local alt_buf = vim.fn.bufnr("#")
     if alt_buf > 0 then
       alternate_path = norm(vim.api.nvim_buf_get_name(alt_buf))
     end

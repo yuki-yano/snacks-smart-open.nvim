@@ -1,11 +1,11 @@
-local Config = require('snacks-smart-open.config')
-local DB = require('snacks-smart-open.db')
-local State = require('snacks-smart-open.state')
-local Util = require('snacks-smart-open.util')
+local Config = require("snacks-smart-open.config")
+local DB = require("snacks-smart-open.db")
+local State = require("snacks-smart-open.state")
+local Util = require("snacks-smart-open.util")
 
 local uv = vim.uv or vim.loop
 
-local picker_util = require('snacks.picker.util')
+local picker_util = require("snacks.picker.util")
 
 local M = {}
 
@@ -28,12 +28,12 @@ end
 local function update_usage(path, config, opts)
   opts = opts or {}
   local now = opts.now or os.time()
-  if not path or path == '' then
+  if not path or path == "" then
     return
   end
 
   local stat = vim.loop.fs_stat(path)
-  if not stat or stat.type ~= 'file' then
+  if not stat or stat.type ~= "file" then
     return
   end
 
@@ -142,7 +142,7 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
   local max_delta = cfg.max_delta or 0
 
   local function apply_delta(key, weight, direction, delta)
-    if direction == 'down' and is_protected(key, cfg) then
+    if direction == "down" and is_protected(key, cfg) then
       return
     end
     if max_delta > 0 then
@@ -152,7 +152,7 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
       return
     end
     local current = weights[key] or weight
-    if direction == 'down' then
+    if direction == "down" then
       weights[key] = math.max(min_weight, current - delta)
     else
       weights[key] = math.min(max_weight, current + delta)
@@ -166,10 +166,10 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
       if hit and miss then
         if miss > hit and to_deduct > 0 then
           local delta = cfg.adjustment_points * factor * ((miss - hit) / to_deduct)
-          apply_delta(key, weight, 'down', delta)
+          apply_delta(key, weight, "down", delta)
         elseif hit > miss and to_add > 0 then
           local delta = cfg.adjustment_points * factor * ((hit - miss) / to_add)
-          apply_delta(key, weight, 'up', delta)
+          apply_delta(key, weight, "up", delta)
         end
       end
     end
@@ -177,7 +177,7 @@ local function adjust_weights(original, weights, success_entry, miss_entry, fact
 end
 
 local function revise_weights(original_weights, results, selected_path, cfg)
-  if not selected_path or selected_path == '' then
+  if not selected_path or selected_path == "" then
     return original_weights
   end
   local selected = select_entry(results, selected_path)
@@ -237,7 +237,7 @@ local function resolve_scope(picker, config)
     cwd = state.cwd,
     markers = config.scoring and config.scoring.project_roots or {},
   })
-  return scope or ''
+  return scope or ""
 end
 
 function M.bootstrap(config)
@@ -246,8 +246,8 @@ function M.bootstrap(config)
   DB.ensure_weights(config.weights)
   State.update()
 
-  local state_group = vim.api.nvim_create_augroup('snacks_smart_open_state', { clear = true })
-  vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWinEnter', 'BufWritePost', 'BufDelete' }, {
+  local state_group = vim.api.nvim_create_augroup("snacks_smart_open_state", { clear = true })
+  vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "BufWritePost", "BufDelete" }, {
     group = state_group,
     callback = function()
       State.update()
@@ -259,8 +259,8 @@ function M.bootstrap(config)
   if M._autocmd then
     return
   end
-  local group = vim.api.nvim_create_augroup('snacks_smart_open_usage', { clear = true })
-  vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWritePost' }, {
+  local group = vim.api.nvim_create_augroup("snacks_smart_open_usage", { clear = true })
+  vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWritePost" }, {
     group = group,
     callback = function(args)
       local buf = args.buf
@@ -268,7 +268,7 @@ function M.bootstrap(config)
         return
       end
       local name = vim.api.nvim_buf_get_name(buf)
-      if name == '' or vim.bo[buf].buftype ~= '' then
+      if name == "" or vim.bo[buf].buftype ~= "" then
         return
       end
       if vim.b[buf].snacks_smart_open_registered then
@@ -325,9 +325,9 @@ end
 function M.on_error(_, err)
   vim.schedule(function()
     vim.notify(
-      ('snacks-smart-open: error while running confirm hook: %s'):format(err),
+      ("snacks-smart-open: error while running confirm hook: %s"):format(err),
       vim.log.levels.ERROR,
-      { title = 'snacks-smart-open' }
+      { title = "snacks-smart-open" }
     )
   end)
 end
