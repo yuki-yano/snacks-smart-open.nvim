@@ -86,9 +86,11 @@ require("snacks-smart-open").setup({
 2. A confirm action hook stores usage in SQLite, updates frecency decay, and feeds the top results back into the learning routine that nudges signal weights.
 3. Runtime state is kept outside Snacks so existing configuration continues to work unchanged.
 
-## License Compatibility
+## Attribution
 
-smart-open.nvim is released under the MIT License. This project reimplements its ideas without copying source code, and is likewise distributed under MIT. You may therefore use snacks-smart-open.nvim alongside smart-open.nvim without additional obligations beyond the MIT terms.
+This project is inspired by [smart-open.nvim](https://github.com/danielfalk/smart-open.nvim), which is distributed under the MIT License.
+
+The code in this repository is distributed under the MIT License in [`LICENSE`](./LICENSE). If smart-open.nvim code or other substantial portions of its source are copied into this repository in the future, its copyright notice and permission notice should be preserved together with the copied portions.
 
 ## License
 
