@@ -19,6 +19,14 @@ local function add_package_path(path)
   end
 end
 
+local function first_dir(candidates)
+  for _, path in ipairs(candidates) do
+    if path and path ~= "" and vim.fn.isdirectory(path) == 1 then
+      return path
+    end
+  end
+end
+
 local root = vim.fn.fnamemodify(vim.fn.expand("<sfile>"), ":p:h:h")
 ensure_dir(root)
 vim.opt.runtimepath:prepend(root)
@@ -37,6 +45,20 @@ for _, path in ipairs(candidates) do
     add_package_path(path)
     break
   end
+end
+
+if #vim.api.nvim_list_uis() == 0 then
+  local mini_path = first_dir({
+    vim.env.MINI_NVIM_PATH,
+    vim.fn.stdpath("data") .. "/lazy/mini.nvim",
+    vim.fn.expand("~/repos/github.com/nvim-mini/mini.nvim"),
+    vim.fn.expand("~/repos/github.com/echasnovski/mini.nvim"),
+  })
+  if mini_path then
+    vim.opt.runtimepath:append(mini_path)
+    add_package_path(mini_path)
+  end
+  require("mini.test").setup({ silent = true })
 end
 
 local function noop() end

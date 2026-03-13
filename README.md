@@ -86,6 +86,10 @@ require("snacks-smart-open").setup({
 2. A confirm action hook stores usage in SQLite, updates frecency decay, and feeds the top results back into the learning routine that nudges signal weights.
 3. Runtime state is kept outside Snacks so existing configuration continues to work unchanged.
 
+## Development
+
+Run `make test` to execute the test suite with `mini.test`. The target bootstraps `mini.nvim` into `~/.cache/snacks-smart-open.nvim/mini.nvim` if it is not already available.
+
 ## Attribution
 
 This project is inspired by [smart-open.nvim](https://github.com/danielfalk/smart-open.nvim), which is distributed under the MIT License.

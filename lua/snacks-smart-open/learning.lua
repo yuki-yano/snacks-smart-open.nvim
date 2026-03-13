@@ -8,6 +8,8 @@ local uv = vim.uv or vim.loop
 local picker_util = require("snacks.picker.util")
 
 local M = {}
+local STATE_GROUP = "snacks_smart_open_state"
+local USAGE_GROUP = "snacks_smart_open_usage"
 
 local function current_score(record, now, decay)
   local time_left = (record.expiration or 0) - now
@@ -240,26 +242,14 @@ local function resolve_scope(picker, config)
   return scope or ""
 end
 
-function M.bootstrap(config)
-  config = config or Config.get()
-  DB.ensure(config)
-  DB.ensure_weights(config.weights)
-  State.update()
+local function disable_usage_tracking()
+  pcall(vim.api.nvim_del_augroup_by_name, USAGE_GROUP)
+  M._autocmd = nil
+end
 
-  local state_group = vim.api.nvim_create_augroup("snacks_smart_open_state", { clear = true })
-  vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "BufWritePost", "BufDelete" }, {
-    group = state_group,
-    callback = function()
-      State.update()
-    end,
-  })
-  if config.learning.auto_record == false then
-    return
-  end
-  if M._autocmd then
-    return
-  end
-  local group = vim.api.nvim_create_augroup("snacks_smart_open_usage", { clear = true })
+local function enable_usage_tracking(config)
+  disable_usage_tracking()
+  local group = vim.api.nvim_create_augroup(USAGE_GROUP, { clear = true })
   vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWritePost" }, {
     group = group,
     callback = function(args)
@@ -271,10 +261,6 @@ function M.bootstrap(config)
       if name == "" or vim.bo[buf].buftype ~= "" then
         return
       end
-      if vim.b[buf].snacks_smart_open_registered then
-        return
-      end
-      vim.b[buf].snacks_smart_open_registered = true
       update_usage(name, config)
       State.update()
     end,
@@ -282,11 +268,36 @@ function M.bootstrap(config)
   M._autocmd = group
 end
 
+local function sync_usage_tracking(config)
+  if config.learning.auto_record == false then
+    disable_usage_tracking()
+    return
+  end
+  enable_usage_tracking(config)
+end
+
+function M.bootstrap(config)
+  config = config or Config.get()
+  DB.ensure(config)
+  DB.ensure_weights(config.weights)
+  State.update()
+
+  local state_group = vim.api.nvim_create_augroup(STATE_GROUP, { clear = true })
+  vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "BufWritePost", "BufDelete" }, {
+    group = state_group,
+    callback = function()
+      State.update()
+    end,
+  })
+  sync_usage_tracking(config)
+end
+
 function M.refresh(config)
   config = config or Config.get()
   DB.ensure(config)
   DB.ensure_weights(config.weights)
   State.update()
+  sync_usage_tracking(config)
 end
 
 function M.before_confirm(picker)

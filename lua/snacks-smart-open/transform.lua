@@ -6,6 +6,7 @@ local Util = require("snacks-smart-open.util")
 local picker_util = require("snacks.picker.util")
 
 local CONTEXT_KEY = "snacks_smart_open_ctx"
+local PATH_SEP = package.config:sub(1, 1)
 
 local function get_record(context, path)
   local cache = context.records
@@ -155,7 +156,9 @@ local function compute_scores(context, path)
   raw.proximity = Util.normalize_proximity(Util.calculate_proximity(anchor, path))
 
   local project_root = context.project_root or context.cwd
-  if project_root and path:sub(1, #project_root) == project_root then
+  local in_project = project_root
+    and (path == project_root or path:sub(1, #project_root + 1) == project_root .. PATH_SEP)
+  if in_project then
     raw.project = 1
   end
 
