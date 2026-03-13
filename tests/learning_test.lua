@@ -130,4 +130,34 @@ T["caps frecency expiration using max_lifetime_days"] = function()
   assert(record.expiration - record.last_open <= 24 * 60 * 60)
 end
 
+T["throttles expired cleanup between rapid usage updates"] = function()
+  local file = T.tmp_root .. "/cleanup.lua"
+  vim.fn.writefile({ "print('cleanup')" }, file)
+
+  local original_delete_expired = DB.delete_expired
+  local delete_calls = 0
+  DB.delete_expired = function(now)
+    delete_calls = delete_calls + 1
+    return original_delete_expired(now)
+  end
+
+  Config.apply({
+    db = {
+      path = T.db_path,
+      cleanup_interval_seconds = 3600,
+    },
+    learning = { auto_record = true },
+  })
+  T.Learning = reload_learning()
+  T.Learning.bootstrap(Config.get())
+
+  vim.cmd("silent edit " .. vim.fn.fnameescape(file))
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_exec_autocmds("BufWritePost", { buffer = buf, modeline = false })
+
+  DB.delete_expired = original_delete_expired
+
+  eq(delete_calls, 1)
+end
+
 return T

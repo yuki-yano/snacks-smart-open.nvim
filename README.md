@@ -46,6 +46,7 @@ require("snacks-smart-open").setup({
   apply_to = { "smart", "smart_open_files" },
   db = {
     path = vim.fn.stdpath("data") .. "/snacks/smart-open.sqlite3",
+    cleanup_interval_seconds = 300,
   },
   frecency = {
     half_life_days = 10,
@@ -82,6 +83,7 @@ require("snacks-smart-open").setup({
 - `learning.adjustment_points`, `promote_cap`, and `demote_cap` influence how aggressively weights adapt to your selections.
 - Set `learning.auto_record = false` if you only want usage recorded when confirming picker choices.
 - `frecency.max_lifetime_days` caps how far a single access can extend a record's lifetime.
+- `db.cleanup_interval_seconds` controls how often expired rows are purged during usage updates. Set it to `0` to clean on every write.
 - `scoring.proximity_bias` shifts how quickly directory proximity reaches a strong score; smaller values favor nearby files more aggressively.
 - `scoring.recency_window` limits which database entries contribute to recency ranking.
 - The SQLite database lives under `stdpath("data")/snacks/smart-open.sqlite3` and uses Snacks' built-in SQLite wrapper.

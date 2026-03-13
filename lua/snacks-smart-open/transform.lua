@@ -44,6 +44,39 @@ local function build_recent_rank(open_list, db_rows, norm, now, recency_window)
   return map, rank
 end
 
+local function prime_picker_records(context, ctx, limit)
+  local picker = ctx.picker
+  local items = picker and picker.finder and picker.finder.items or {}
+  if #items == 0 and picker and picker.list and picker.list.items then
+    items = picker.list.items
+  end
+  if #items == 0 then
+    return
+  end
+
+  local paths = {}
+  local seen = {}
+  for _, item in ipairs(items) do
+    local path = picker_util.path(item) or item.file or item.text
+    path = context.normalize(path)
+    if path and not seen[path] then
+      seen[path] = true
+      paths[#paths + 1] = path
+      if #paths >= limit then
+        break
+      end
+    end
+  end
+  if #paths == 0 then
+    return
+  end
+
+  local records = DB.get_files(paths)
+  for _, path in ipairs(paths) do
+    context.records[path] = records[path] or false
+  end
+end
+
 local function ensure_context(ctx)
   local context = ctx.meta[CONTEXT_KEY]
   if context then
@@ -102,7 +135,11 @@ local function ensure_context(ctx)
     build_recent_rank(open_list, recent_rows, norm, now, config.scoring and config.scoring.recency_window)
 
   local oldfiles = vim.v.oldfiles or {}
+  local recent_limit = config.scoring and config.scoring.recency_limit or 512
   for _, file in ipairs(oldfiles) do
+    if rank >= recent_limit then
+      break
+    end
     local path = norm(file)
     if path and not recent_rank[path] then
       rank = rank + 1
@@ -126,6 +163,7 @@ local function ensure_context(ctx)
     normalize = norm,
     seen = {},
   }
+  prime_picker_records(context, ctx, recent_limit)
   ctx.meta[CONTEXT_KEY] = context
   return context
 end

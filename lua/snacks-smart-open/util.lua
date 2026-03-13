@@ -4,11 +4,29 @@ local M = {}
 
 local PATH_SEP = package.config:sub(1, 1)
 local TRAILING_SEP_PATTERN = PATH_SEP == "\\" and "\\+$" or "/+$"
+local NORMALIZE_CACHE_LIMIT = 2048
+local normalize_cache = {}
+local normalize_cache_size = 0
+
+local function is_cacheable(path)
+  if not path or path == "" then
+    return false
+  end
+  if path:sub(1, 1) == "~" or path:sub(1, 1) == PATH_SEP then
+    return true
+  end
+  return PATH_SEP == "\\" and path:match("^%a:[/\\]") ~= nil
+end
 
 function M.normalize_path(path)
   if not path or path == "" then
     return nil
   end
+  local cacheable = is_cacheable(path)
+  if cacheable and normalize_cache[path] ~= nil then
+    return normalize_cache[path] or nil
+  end
+  local original = path
   if path:sub(1, 1) == "~" then
     path = vim.fn.expand(path)
   end
@@ -26,9 +44,23 @@ function M.normalize_path(path)
     return path
   end
   if PATH_SEP == "\\" and path:match("^%a:[/\\]$") then
+    if cacheable then
+      normalize_cache[original] = path
+    end
     return path
   end
-  return path:gsub(TRAILING_SEP_PATTERN, "")
+  path = path:gsub(TRAILING_SEP_PATTERN, "")
+  if cacheable then
+    if normalize_cache_size >= NORMALIZE_CACHE_LIMIT then
+      normalize_cache = {}
+      normalize_cache_size = 0
+    end
+    if normalize_cache[original] == nil then
+      normalize_cache_size = normalize_cache_size + 1
+    end
+    normalize_cache[original] = path
+  end
+  return path
 end
 
 local function normalize_dir(path)

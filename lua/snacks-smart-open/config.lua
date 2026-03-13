@@ -3,6 +3,7 @@ local M = {}
 local defaults = {
   db = {
     path = vim.fn.stdpath("data") .. "/snacks/smart-open.sqlite3",
+    cleanup_interval_seconds = 300,
   },
   frecency = {
     half_life_days = 10,
@@ -80,6 +81,10 @@ local function with_defaults(opts)
   merged.frecency.decay_constant = math.log(2) / seconds
   merged.frecency.expiration_window =
     math.max(seconds, (merged.frecency.max_lifetime_days or defaults.frecency.max_lifetime_days) * 24 * 60 * 60)
+  merged.learning.protect_lookup = {}
+  for _, key in ipairs(merged.learning.protect or {}) do
+    merged.learning.protect_lookup[key] = true
+  end
   return merged
 end
 

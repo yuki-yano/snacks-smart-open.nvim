@@ -3,8 +3,10 @@ local Util = require("snacks-smart-open.util")
 local uv = vim.uv or vim.loop
 
 local M = {}
+local UPDATE_DEBOUNCE_MS = 20
 
 local snapshot ---@type {open_map:table<string,{path:string,bufnr:number,modified:boolean,lastused:number,current:boolean}>,open_list:table[],current_buf:number,current_path:string?,alternate_path:string?,cwd:string?}?
+local pending = false
 
 local function gather()
   local current_buf = vim.api.nvim_get_current_buf()
@@ -14,23 +16,21 @@ local function gather()
   local cwd = Util.normalize_path(uv.cwd() or vim.fn.getcwd())
 
   local map, list = {}, {}
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.bo[buf].buflisted then
-      local name = vim.api.nvim_buf_get_name(buf)
-      if name ~= "" then
-        local path = Util.normalize_path(name)
-        if path then
-          local info = vim.fn.getbufinfo(buf)[1]
-          local entry = {
-            path = path,
-            bufnr = buf,
-            lastused = info and info.lastused or 0,
-            modified = vim.bo[buf].modified,
-            current = current_path and path == current_path or false,
-          }
-          map[path] = entry
-          list[#list + 1] = entry
-        end
+  for _, info in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+    local buf = info.bufnr
+    local name = info.name or ""
+    if name ~= "" then
+      local path = Util.normalize_path(name)
+      if path then
+        local entry = {
+          path = path,
+          bufnr = buf,
+          lastused = info.lastused or 0,
+          modified = info.changed == 1,
+          current = current_path and path == current_path or false,
+        }
+        map[path] = entry
+        list[#list + 1] = entry
       end
     end
   end
@@ -51,14 +51,31 @@ local function gather()
 end
 
 function M.update()
-  if vim.in_fast_event() then
-    vim.schedule(M.update)
+  if not snapshot and not vim.in_fast_event() then
+    local ok = pcall(gather)
+    if not ok then
+      snapshot = snapshot or {}
+    end
     return
   end
-  local ok = pcall(gather)
-  if not ok then
-    snapshot = snapshot or {}
+  if pending then
+    return
   end
+  pending = true
+  local function refresh()
+    pending = false
+    local ok = pcall(gather)
+    if not ok then
+      snapshot = snapshot or {}
+    end
+  end
+  if vim.in_fast_event() then
+    vim.schedule(function()
+      vim.defer_fn(refresh, UPDATE_DEBOUNCE_MS)
+    end)
+    return
+  end
+  vim.defer_fn(refresh, UPDATE_DEBOUNCE_MS)
 end
 
 function M.get()

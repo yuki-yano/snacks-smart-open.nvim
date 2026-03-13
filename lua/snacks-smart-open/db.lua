@@ -8,12 +8,50 @@ local SCHEMA_VERSION = 2
 local connection ---@type snacks.picker.db?
 local connection_path ---@type string?
 local statements = {} ---@type table<string, snacks.picker.db.Query>
+local file_cache = {} ---@type table<string, snacks_smart_open_db.Record|false>
+local weights_cache = {} ---@type table<string, table<string, number>>
+local weights_initialized = {} ---@type table<string, boolean>
+local recent_cache = {} ---@type table<number, {path:string, last_open:number}[]>
+local max_expiration_cache ---@type integer?
+
+local function copy_numbers(values)
+  local ret = {}
+  for key, value in pairs(values or {}) do
+    ret[key] = value
+  end
+  return ret
+end
+
+local function clear_caches()
+  file_cache = {}
+  weights_cache = {}
+  weights_initialized = {}
+  recent_cache = {}
+  max_expiration_cache = nil
+end
+
+local function hydrate_record(stmt)
+  return {
+    path = stmt:col("string", 0),
+    last_open = stmt:col("number", 1) or 0,
+    frequency = stmt:col("number", 2) or 0,
+    frecency = stmt:col("number", 3) or 0,
+    score = stmt:col("number", 4) or 0,
+    expiration = stmt:col("number", 5) or 0,
+    created_at = stmt:col("number", 6) or 0,
+    updated_at = stmt:col("number", 7) or 0,
+  }
+end
 
 local function normalize_scope(scope)
   if type(scope) ~= "string" or scope == "" then
     return ""
   end
   return scope
+end
+
+local function cache_scope(scope)
+  return normalize_scope(scope)
 end
 
 local function serialize_value(value)
@@ -43,6 +81,7 @@ function M.close()
     connection = nil
     connection_path = nil
   end
+  clear_caches()
 end
 
 local function get_user_version(db)
@@ -131,6 +170,7 @@ local function connect(cfg)
   end
   connection = db
   connection_path = cfg.db.path
+  clear_caches()
   apply_schema(connection)
   return connection
 end
@@ -175,7 +215,10 @@ function M.ensure_weights(weights, scope)
     return
   end
   local list = weights or {}
-  local scoped = normalize_scope(scope)
+  local scoped = cache_scope(scope)
+  if weights_initialized[scoped] then
+    return
+  end
   local stmt =
     M.prepare("ensure_weight", "INSERT OR IGNORE INTO snacks_smart_open_weights (scope, key, value) VALUES (?, ?, ?);")
   if not stmt then
@@ -185,15 +228,20 @@ function M.ensure_weights(weights, scope)
     stmt:exec({ scoped, key, serialize_value(value) })
   end
   stmt:reset()
+  weights_initialized[scoped] = true
 end
 
 function M.get_weights(defaults, scope)
   local db = connect()
-  local ret = vim.deepcopy(defaults or {})
+  local scoped = cache_scope(scope)
+  local cached = weights_cache[scoped]
+  if cached then
+    return copy_numbers(cached)
+  end
+  local ret = copy_numbers(defaults or {})
   if not db then
     return ret
   end
-  local scoped = normalize_scope(scope)
   M.ensure_weights(defaults or {}, scoped)
   local stmt = M.prepare("select_weights", "SELECT key, value FROM snacks_smart_open_weights WHERE scope = ?;")
   if not stmt then
@@ -209,10 +257,14 @@ function M.get_weights(defaults, scope)
     code = stmt:step()
   end
   stmt:reset()
+  weights_cache[scoped] = copy_numbers(ret)
   return ret
 end
 
 function M.get_file(path)
+  if file_cache[path] ~= nil then
+    return file_cache[path] or nil
+  end
   local db = connect()
   if not db then
     return
@@ -238,22 +290,76 @@ function M.get_file(path)
   end
   local record
   if stmt:exec({ path }) == 100 then
-    record = {
-      path = stmt:col("string", 0),
-      last_open = stmt:col("number", 1) or 0,
-      frequency = stmt:col("number", 2) or 0,
-      frecency = stmt:col("number", 3) or 0,
-      score = stmt:col("number", 4) or 0,
-      expiration = stmt:col("number", 5) or 0,
-      created_at = stmt:col("number", 6) or 0,
-      updated_at = stmt:col("number", 7) or 0,
-    }
+    record = hydrate_record(stmt)
   end
   stmt:reset()
+  file_cache[path] = record or false
   return record
 end
 
+function M.get_files(paths)
+  local db = connect()
+  local ret = {}
+  if not db then
+    return ret
+  end
+  local missing = {}
+  for _, path in ipairs(paths or {}) do
+    if path and ret[path] == nil then
+      if file_cache[path] ~= nil then
+        ret[path] = file_cache[path] or nil
+      else
+        missing[#missing + 1] = path
+      end
+    end
+  end
+  if #missing == 0 then
+    return ret
+  end
+
+  local placeholders = table.concat(
+    vim.tbl_map(function()
+      return "?"
+    end, missing),
+    ", "
+  )
+  local stmt = M.prepare(
+    "select_files_" .. #missing,
+    ([[
+      SELECT
+        path,
+        last_open,
+        frequency,
+        frecency,
+        score,
+        expiration,
+        created_at,
+        updated_at
+      FROM snacks_smart_open_files
+      WHERE path IN (%s);
+    ]]):format(placeholders)
+  )
+  if not stmt then
+    return ret
+  end
+  for _, path in ipairs(missing) do
+    file_cache[path] = false
+  end
+  local code = stmt:exec(missing)
+  while code == 100 do
+    local record = hydrate_record(stmt)
+    file_cache[record.path] = record
+    ret[record.path] = record
+    code = stmt:step()
+  end
+  stmt:reset()
+  return ret
+end
+
 function M.max_flat_score(now)
+  if max_expiration_cache and now then
+    return math.max(0, max_expiration_cache - now)
+  end
   local db = connect()
   if not db then
     return 0
@@ -266,6 +372,7 @@ function M.max_flat_score(now)
   if stmt:exec() == 100 then
     local max_expiration = stmt:col("number", 0)
     if max_expiration and now then
+      max_expiration_cache = max_expiration
       max_flat = math.max(0, max_expiration - now)
     end
   end
@@ -279,6 +386,9 @@ function M.get_recent(limit)
     return {}
   end
   limit = limit or 512
+  if recent_cache[limit] then
+    return recent_cache[limit]
+  end
   local stmt =
     M.prepare("recent_files", "SELECT path, last_open FROM snacks_smart_open_files ORDER BY last_open DESC LIMIT ?;")
   if not stmt then
@@ -294,6 +404,7 @@ function M.get_recent(limit)
     code = stmt:step()
   end
   stmt:reset()
+  recent_cache[limit] = results
   return results
 end
 
@@ -318,6 +429,8 @@ function M.save_weights(weights, scope)
     stmt:exec({ scoped, key, serialize_value(value) })
   end
   stmt:reset()
+  weights_cache[scoped] = nil
+  weights_initialized[scoped] = true
 end
 
 function M.update_file(opts)
@@ -358,8 +471,27 @@ function M.update_file(opts)
   local expiration = opts.expiration or last_open
   local created_at = opts.created_at or last_open
   local updated_at = opts.updated_at or last_open
+  local cached = file_cache[path]
+  if cached == nil then
+    cached = M.get_file(path)
+  end
+  local current_frequency = cached and cached ~= false and cached.frequency or 0
   stmt:exec({ path, dir, last_open, frequency, frecency, score, expiration, created_at, updated_at })
   stmt:reset()
+  file_cache[path] = {
+    path = path,
+    last_open = last_open,
+    frequency = current_frequency + frequency,
+    frecency = frecency,
+    score = score,
+    expiration = expiration,
+    created_at = created_at,
+    updated_at = updated_at,
+  }
+  recent_cache = {}
+  if not max_expiration_cache or expiration > max_expiration_cache then
+    max_expiration_cache = expiration
+  end
 end
 
 function M.delete_expired(now)
@@ -373,6 +505,13 @@ function M.delete_expired(now)
   end
   stmt:exec({ now })
   stmt:reset()
+  max_expiration_cache = nil
+  recent_cache = {}
+  for path, record in pairs(file_cache) do
+    if record and (record.expiration or 0) <= now then
+      file_cache[path] = false
+    end
+  end
 end
 
 vim.api.nvim_create_autocmd("VimLeavePre", {

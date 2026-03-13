@@ -10,6 +10,15 @@ local picker_util = require("snacks.picker.util")
 local M = {}
 local STATE_GROUP = "snacks_smart_open_state"
 local USAGE_GROUP = "snacks_smart_open_usage"
+local cleanup_at = {}
+
+local function copy_numbers(values)
+  local ret = {}
+  for key, value in pairs(values or {}) do
+    ret[key] = value
+  end
+  return ret
+end
 
 local function current_score(record, now, decay)
   local time_left = (record.expiration or 0) - now
@@ -62,7 +71,14 @@ local function update_usage(path, config, opts)
     created_at = record.created_at ~= 0 and record.created_at or now,
     updated_at = now,
   })
-  DB.delete_expired(now)
+
+  local cleanup_interval = math.max(0, (config.db and config.db.cleanup_interval_seconds) or 0)
+  local db_key = DB.path() or ""
+  local last_cleanup = cleanup_at[db_key]
+  if cleanup_interval == 0 or not last_cleanup or (now - last_cleanup) >= cleanup_interval then
+    DB.delete_expired(now)
+    cleanup_at[db_key] = now
+  end
 end
 
 local function capture_results(picker, config)
@@ -74,7 +90,7 @@ local function capture_results(picker, config)
       ret[#ret + 1] = {
         path = item.smart_open.path,
         current = item.smart_open.is_current,
-        scores = vim.deepcopy(item.smart_open.scores or {}),
+        scores = copy_numbers(item.smart_open.scores or {}),
       }
       if #ret >= limit then
         break
@@ -93,9 +109,12 @@ local function select_entry(results, path)
 end
 
 local function is_protected(key, cfg)
-  local protect = cfg and cfg.protect or nil
+  local protect = cfg and (cfg.protect_lookup or cfg.protect) or nil
   if not protect then
     return false
+  end
+  if protect[key] ~= nil then
+    return protect[key]
   end
   for _, name in ipairs(protect) do
     if name == key then
@@ -187,7 +206,7 @@ local function revise_weights(original_weights, results, selected_path, cfg)
   if not selected then
     return original_weights
   end
-  local new_weights = vim.deepcopy(original_weights)
+  local new_weights = copy_numbers(original_weights)
   local greater, lesser = {}, {}
   local found = false
   for _, entry in ipairs(results) do
@@ -224,8 +243,12 @@ local function record_selected(paths, config)
   if not paths then
     return
   end
+  local seen = {}
   for _, path in ipairs(paths) do
-    update_usage(path, config)
+    if path and not seen[path] then
+      seen[path] = true
+      update_usage(path, config)
+    end
   end
 end
 
