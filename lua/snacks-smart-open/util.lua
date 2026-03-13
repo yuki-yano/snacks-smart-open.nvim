@@ -3,6 +3,7 @@ local uv = vim.uv or vim.loop
 local M = {}
 
 local PATH_SEP = package.config:sub(1, 1)
+local TRAILING_SEP_PATTERN = PATH_SEP == "\\" and "\\+$" or "/+$"
 
 function M.normalize_path(path)
   if not path or path == "" then
@@ -21,7 +22,13 @@ function M.normalize_path(path)
   if path == "" then
     return nil
   end
-  return path:gsub("/+$", "")
+  if path == PATH_SEP then
+    return path
+  end
+  if PATH_SEP == "\\" and path:match("^%a:[/\\]$") then
+    return path
+  end
+  return path:gsub(TRAILING_SEP_PATTERN, "")
 end
 
 local function normalize_dir(path)
@@ -94,9 +101,10 @@ function M.calculate_proximity(a, b)
   return in_common
 end
 
-function M.normalize_proximity(value)
+function M.normalize_proximity(value, bias)
   value = value or 0
-  return 1 - 1 / (1 + math.exp(value * 0.5 - 3))
+  bias = bias or 6
+  return 1 - 1 / (1 + math.exp(value * 0.5 - bias * 0.5))
 end
 
 return M

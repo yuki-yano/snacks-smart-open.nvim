@@ -27,7 +27,18 @@ local state = {
   snacks = nil,
   original_transform = {},
   original_confirm = {},
+  original_sources = {},
+  original_source_present = {},
+  applied_sources = {},
 }
+
+local function list_to_set(list)
+  local set = {}
+  for _, item in ipairs(list or {}) do
+    set[item] = true
+  end
+  return set
+end
 
 local function resolve_transform(spec)
   if type(spec) == "function" then
@@ -88,6 +99,14 @@ local function wrap_confirm(source)
   end
 end
 
+local function restore_source(sources, source)
+  if state.original_source_present[source] then
+    sources[source] = vim.deepcopy(state.original_sources[source])
+  else
+    sources[source] = nil
+  end
+end
+
 local function apply_picker_overrides(config)
   if not state.snacks then
     return
@@ -104,7 +123,17 @@ local function apply_picker_overrides(config)
   picker_cfg.sources = picker_cfg.sources or {}
   local sources = picker_cfg.sources
   local config_sources = config.apply_to or { "smart", "smart_open_files" }
+  local active_sources = list_to_set(config_sources)
+  for source in pairs(state.applied_sources) do
+    if not active_sources[source] then
+      restore_source(sources, source)
+    end
+  end
   for _, source in ipairs(config_sources) do
+    if state.original_source_present[source] == nil then
+      state.original_source_present[source] = sources[source] ~= nil
+      state.original_sources[source] = sources[source] and vim.deepcopy(sources[source]) or nil
+    end
     sources[source] = sources[source] or {}
     if default_source_config[source] then
       sources[source] = vim.tbl_deep_extend("force", {}, default_source_config[source], sources[source] or {})
@@ -125,6 +154,7 @@ local function apply_picker_overrides(config)
       vim.tbl_deep_extend("force", conf.matcher or {}, vim.deepcopy(config.picker and config.picker.matcher or {}))
     conf.sort = vim.tbl_deep_extend("force", conf.sort or {}, vim.deepcopy(config.picker and config.picker.sort or {}))
   end
+  state.applied_sources = active_sources
 end
 
 function M.setup(snacks, config)
@@ -139,11 +169,11 @@ function M.setup(snacks, config)
   state.applied = true
 end
 
-function M.reconfigure()
+function M.reconfigure(config)
   if not state.snacks then
     return
   end
-  local config = Config.get()
+  config = config or Config.get()
   DB.ensure(config)
   Learning.refresh(config)
   apply_picker_overrides(config)

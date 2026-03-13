@@ -52,6 +52,10 @@ require("snacks-smart-open").setup({
     score_per_access = 100,
     max_lifetime_days = 365,
   },
+  scoring = {
+    proximity_bias = 6,
+    recency_window = 7 * 24 * 60 * 60,
+  },
   weights = {
     path_fzf = 140,
     path_fzy = 140,
@@ -77,8 +81,13 @@ require("snacks-smart-open").setup({
 - `weights` mirrors smart-open.nvim's initial values; learned adjustments are persisted in the `snacks_smart_open_weights` table.
 - `learning.adjustment_points`, `promote_cap`, and `demote_cap` influence how aggressively weights adapt to your selections.
 - Set `learning.auto_record = false` if you only want usage recorded when confirming picker choices.
+- `frecency.max_lifetime_days` caps how far a single access can extend a record's lifetime.
+- `scoring.proximity_bias` shifts how quickly directory proximity reaches a strong score; smaller values favor nearby files more aggressively.
+- `scoring.recency_window` limits which database entries contribute to recency ranking.
 - The SQLite database lives under `stdpath("data")/snacks/smart-open.sqlite3` and uses Snacks' built-in SQLite wrapper.
 - `apply_to` controls which picker sources receive the smart-open scoring/learning hooks. The default is `{ "smart", "smart_open_files" }`; add any other source keys here to opt-in. Existing finder behaviour and source-specific defaults remain untouched—only the smart-open scoring and learning logic is layered on top.
+
+You can update the active configuration at runtime with `require("snacks-smart-open").reconfigure({...})`; the provided options are merged into the current config before hooks are refreshed.
 
 ## How It Works
 

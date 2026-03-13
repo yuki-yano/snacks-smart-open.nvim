@@ -107,4 +107,27 @@ T["enables auto recording when refreshed with auto_record=true"] = function()
   eq(record.frequency, 1)
 end
 
+T["caps frecency expiration using max_lifetime_days"] = function()
+  local file = T.tmp_root .. "/lifetime.lua"
+  vim.fn.writefile({ "print('lifetime')" }, file)
+
+  Config.apply({
+    db = { path = T.db_path },
+    frecency = {
+      half_life_days = 0.1,
+      max_lifetime_days = 1,
+      score_per_access = 100000,
+    },
+    learning = { auto_record = true },
+  })
+  T.Learning = reload_learning()
+  T.Learning.bootstrap(Config.get())
+
+  vim.cmd("silent edit " .. vim.fn.fnameescape(file))
+  local path = Util.normalize_path(vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf()))
+  local record = DB.get_file(path)
+
+  assert(record.expiration - record.last_open <= 24 * 60 * 60)
+end
+
 return T

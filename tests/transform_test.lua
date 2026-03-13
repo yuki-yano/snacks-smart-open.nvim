@@ -88,4 +88,83 @@ T["does not treat sibling directories as the same project"] = function()
   eq(transformed.smart_open.features.project, 0)
 end
 
+T["respects recency_window when ranking database rows"] = function()
+  local file = T.tmp_root .. "/recent.lua"
+  vim.fn.writefile({ "return true" }, file)
+  local normalized = Util.normalize_path(file)
+
+  Config.apply({
+    db = { path = T.tmp_root .. "/smart-open.sqlite3" },
+    scoring = { recency_window = 1 },
+  })
+
+  DB.get_recent = function()
+    return {
+      { path = normalized, last_open = os.time() - 60 },
+    }
+  end
+  State.get = function()
+    return {
+      cwd = Util.normalize_path(T.tmp_root),
+      open_map = {},
+      open_list = {},
+    }
+  end
+
+  local transformed = Transform.apply({
+    file = file,
+  }, {
+    filter = { cwd = T.tmp_root },
+    meta = {},
+  })
+
+  eq(transformed.smart_open.features.recency, 0)
+end
+
+T["respects proximity_bias when scoring nearby files"] = function()
+  local project_root = T.tmp_root .. "/proj"
+  local current_file = project_root .. "/src/current.lua"
+  local nearby_file = project_root .. "/src/nested/other.lua"
+
+  vim.fn.mkdir(vim.fn.fnamemodify(nearby_file, ":h"), "p")
+  vim.fn.writefile({ "return true" }, current_file)
+  vim.fn.writefile({ "return false" }, nearby_file)
+
+  DB.get_recent = function()
+    return {}
+  end
+  State.get = function()
+    return {
+      cwd = Util.normalize_path(project_root),
+      current_path = Util.normalize_path(current_file),
+      open_map = {},
+      open_list = {},
+    }
+  end
+
+  Config.apply({
+    db = { path = T.tmp_root .. "/smart-open.sqlite3" },
+    scoring = { proximity_bias = 2 },
+  })
+  local low_bias = Transform.apply({
+    file = nearby_file,
+  }, {
+    filter = { cwd = project_root },
+    meta = {},
+  })
+
+  Config.apply({
+    db = { path = T.tmp_root .. "/smart-open.sqlite3" },
+    scoring = { proximity_bias = 20 },
+  })
+  local high_bias = Transform.apply({
+    file = nearby_file,
+  }, {
+    filter = { cwd = project_root },
+    meta = {},
+  })
+
+  assert(low_bias.smart_open.features.proximity > high_bias.smart_open.features.proximity)
+end
+
 return T

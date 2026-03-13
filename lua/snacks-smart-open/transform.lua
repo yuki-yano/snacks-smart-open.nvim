@@ -18,7 +18,7 @@ local function get_record(context, path)
   return record
 end
 
-local function build_recent_rank(open_list, db_rows, norm)
+local function build_recent_rank(open_list, db_rows, norm, now, recency_window)
   local rank = 0
   local map = {}
   for _, entry in ipairs(open_list) do
@@ -28,11 +28,18 @@ local function build_recent_rank(open_list, db_rows, norm)
     end
   end
   for _, row in ipairs(db_rows) do
+    if recency_window and recency_window > 0 then
+      local last_open = row.last_open or 0
+      if last_open < (now - recency_window) then
+        goto continue
+      end
+    end
     local path = norm(row.path)
     if path and not map[path] then
       rank = rank + 1
       map[path] = rank
     end
+    ::continue::
   end
   return map, rank
 end
@@ -91,7 +98,8 @@ local function ensure_context(ctx)
   end
 
   local recent_rows = DB.get_recent(config.scoring.recency_limit or 512)
-  local recent_rank, rank = build_recent_rank(open_list, recent_rows, norm)
+  local recent_rank, rank =
+    build_recent_rank(open_list, recent_rows, norm, now, config.scoring and config.scoring.recency_window)
 
   local oldfiles = vim.v.oldfiles or {}
   for _, file in ipairs(oldfiles) do
@@ -107,6 +115,7 @@ local function ensure_context(ctx)
     cwd = cwd,
     scope = scope,
     project_root = scope,
+    proximity_bias = (config.scoring and config.scoring.proximity_bias) or 6,
     current_path = current_path,
     alternate_path = alternate_path,
     open_map = open_map,
@@ -153,7 +162,7 @@ local function compute_scores(context, path)
   end
 
   local anchor = context.current_path or context.cwd
-  raw.proximity = Util.normalize_proximity(Util.calculate_proximity(anchor, path))
+  raw.proximity = Util.normalize_proximity(Util.calculate_proximity(anchor, path), context.proximity_bias)
 
   local project_root = context.project_root or context.cwd
   local in_project = project_root

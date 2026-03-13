@@ -33,6 +33,14 @@ T["normalizes absolute paths without trailing separators"] = function()
   no_eq(normalized:sub(-1), "/")
 end
 
+T["keeps the filesystem root path intact"] = function()
+  if package.config:sub(1, 1) ~= "/" then
+    return
+  end
+
+  eq(Util.normalize_path("/"), "/")
+end
+
 T["finds project root using markers"] = function()
   local project = T.temp_root .. "/proj"
   local nested = project .. "/src/module"

@@ -23,6 +23,7 @@ local function compute_expiration(record, now, cfg)
   local decay = cfg.frecency.decay_constant
   local score = current_score(record, now, decay) + cfg.frecency.score_per_access
   local lifetime = math.log(score) / decay
+  lifetime = math.min(lifetime, cfg.frecency.expiration_window or lifetime)
   local expiration = math.floor(now + lifetime)
   return expiration, score
 end

@@ -88,6 +88,13 @@ function M.apply(opts)
   return M._config
 end
 
+function M.merge(opts)
+  if not opts then
+    return M.get()
+  end
+  return M.apply(vim.tbl_deep_extend("force", {}, M.get(), opts))
+end
+
 function M.get()
   if not M._config then
     return M.apply({})

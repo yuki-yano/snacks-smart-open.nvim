@@ -40,11 +40,12 @@ function M.setup(opts)
 end
 
 function M.reconfigure(opts)
+  local config = Config.get()
   if opts then
-    Config.apply(opts)
+    config = Config.merge(opts)
   end
-  Runtime.reconfigure()
-  return Config.get()
+  Runtime.reconfigure(config)
+  return config
 end
 
 function M.config()
